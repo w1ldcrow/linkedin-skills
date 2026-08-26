@@ -1,0 +1,13 @@
+{
+  "name": "linkedin-skills",
+  "version": "0.1.0",
+  "description": "LinkedIn skill package for Claude Code — minimal official-API client",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "linkedin-api": "tools/linkedin-api.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

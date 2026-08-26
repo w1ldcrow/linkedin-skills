@@ -1,0 +1,21 @@
+.env
+.env.*
+*.local.json
+.linkedin-token*
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# personal data — lives only on this machine, never tracked
+context/profile.md
+context/targets.md
+context/brand.md
+context/voice.md
+context/private/
+plans/**
+!plans/*/
+!plans/**/.gitkeep
+docs/private/
+docs/superpowers/
