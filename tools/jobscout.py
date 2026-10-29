@@ -62,6 +62,9 @@ SEARCH_DEFAULTS = {
 }
 THRESHOLD_DEFAULTS = {"match": 0.6, "recent_hours": 72, "skill_saturation": 12}
 CACHE_TTL = timedelta(days=60)
+COMPANY_SIGNALS = Path(__file__).resolve().parent.parent / "shared" / "company-signals.json"
+DEMOTE = {"high": "medium", "medium": "low"}
+_TRANSLATION = re.compile(r"\.([a-z]{2}(?:-[a-z]{2})?)$", re.IGNORECASE)
 VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 BLOCK_TAGS = {"p", "div", "br", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "section", "tr"}
 
@@ -415,11 +418,18 @@ def prune_cache(cache: Path, now: datetime) -> None:
             path.unlink()
 
 
-def load_profile(path: str) -> dict:
+def load_profile(path: str, signals: Path = COMPANY_SIGNALS) -> dict:
     profile = json.loads(Path(path).read_text())
     profile["thresholds"] = {**THRESHOLD_DEFAULTS, **profile.get("thresholds", {})}
     profile["search_defaults"] = {**SEARCH_DEFAULTS, **profile.get("search_defaults", {})}
+    shared = json.loads(signals.read_text()).get("deprioritize", []) if signals.exists() else []
+    profile["deprioritize"] = shared + profile.get("companies", {}).get("deprioritize", [])
     return profile
+
+
+def company_signal(company: str, profile: dict) -> dict | None:
+    folded = fold(company)
+    return next((entry for entry in profile.get("deprioritize", []) if hits(folded, entry["names"])), None)
 
 
 def title_blockers(title: str, profile: dict) -> list[str]:
@@ -604,6 +614,11 @@ def classify(job: dict, profile: dict, now: datetime, review: dict | None = None
         priority = "medium"
     else:
         priority = "low"
+    signal = company_signal(job["company"], profile)
+    company_factor = signal.get("factor", 0.6) if signal else 1.0
+    if signal:
+        priority = DEMOTE.get(priority, priority)
+        red_flags.append(f"empresa despriorizada: {signal['note']}")
 
     if matched:
         reasons.append(f"skills: {', '.join(matched)}")
@@ -629,13 +644,14 @@ def classify(job: dict, profile: dict, now: datetime, review: dict | None = None
         "salary": detail.get("salary") or job.get("salary", ""),
         "apply": detail.get("apply", ""),
         "priority": priority,
-        "score": round(0.5 * match + 0.3 * remote_score + 0.2 * recency, 3),
+        "score": round((0.5 * match + 0.3 * remote_score + 0.2 * recency) * company_factor, 3),
         "scores": {
             "match": match,
             "match_keywords": keyword_match,
             "match_source": match_source,
             "remote": remote_score,
             "recency": round(recency, 3),
+            "company": company_factor,
         },
         "checks": checks,
         "matched_skills": matched,
@@ -669,16 +685,24 @@ def dedupe(jobs: list[dict]) -> list[dict]:
 
 
 def load_resumes(folder: Path) -> dict[str, dict]:
-    """Tailored résumés by the posting id in their `target`, as absolute paths."""
-    found = {}
+    """Tailored résumés by the posting id in their `target`, as absolute paths.
+
+    `<name>.json` is the version in the source language; `<name>.<lang>.json` is a
+    translation and lands under `translations[<lang>]`.
+    """
+    found: dict[str, dict] = {}
     for path in sorted(folder.glob("*.json")):
         target = json.loads(path.read_text()).get("target", {})
-        if target.get("id"):
-            pdf = path.with_suffix(".pdf")
-            found[str(target["id"])] = {
-                "json": str(path.resolve()),
-                "pdf": str(pdf.resolve()) if pdf.exists() else None,
-            }
+        if not target.get("id"):
+            continue
+        pdf = path.with_suffix(".pdf")
+        files = {"json": str(path.resolve()), "pdf": str(pdf.resolve()) if pdf.exists() else None}
+        entry = found.setdefault(str(target["id"]), {"json": None, "pdf": None, "translations": {}})
+        language = _TRANSLATION.search(path.stem)
+        if language:
+            entry["translations"][language.group(1).lower()] = files
+        else:
+            entry.update(files)
     return found
 
 

@@ -102,6 +102,7 @@ Field reference:
 | `candidate.cities` | hybrid or on-site here is kept (never high); anywhere else is a discard |
 | `off_stack` | in the title: match × 0.25; in the description: −0.05 each (max −0.2) |
 | `dealbreakers` | phrase in the posting → discard |
+| `companies.deprioritize` | `[{names, factor, note}]` added to `shared/company-signals.json` — a matching company drops one priority level and its score × `factor` |
 | `remote.home` / `regions` | location (its country part) that counts as hireable-from-home |
 | `remote.open_phrases` | description opening the role to the owner's region; lifts a restriction |
 | `remote.restricted_phrases` | description limiting hires to another country → discard |
@@ -109,6 +110,15 @@ Field reference:
 | `search_defaults` / `searches` | LinkedIn queries; `workplace` remote/hybrid/onsite, `hours` window, `experience`, `max_pages` (10 cards each) |
 
 ## Step 2: read the invocation
+
+**Deprioritized companies.** `shared/company-signals.json` lists companies whose
+postings rarely turn into a live opening — high volumes of recurring, generic
+listings, often feeding a talent pool (BairesDev and Stefanini today). Every run
+reads it: a match drops one priority level (high → medium → low), multiplies the
+score by `factor` (0.6) and shows the `note` as a red flag. When the owner says a
+company belongs there, add it to that file (shared by every profile) — or to
+`companies.deprioritize` in one profile — and keep the note factual: what the
+postings look like, never an accusation.
 
 Workplace comes from the title, then the description, then LinkedIn's remote tag —
 posters tag "100% presencial" jobs as remote often enough that the tag goes last.
@@ -220,7 +230,7 @@ For each, copy `$CTX/resume.json` to `$OUT/$STAMP-cv/NN-<company-slug>-<id>.json
 Everything else is frozen: name, contact, links, employers, titles, places,
 periods, education, the number of bullets per job, the language of the résumé.
 A posting in English gets a `changes` line saying an English version would read
-better; translating is a separate request.
+better; translating is a separate request (below).
 
 Add to each file:
 
@@ -250,6 +260,21 @@ Every `error` is a fact the source does not support: rewrite until `ok`. Read
 every `warn`. Confirm each PDF keeps the source's page count (`pdfinfo`), and look
 at one rendered page. Report the folder, the list (rank, job, company, link), and
 the gaps the `changes` lines named.
+
+**Translations (on request).** Translate once, check once, then tailor:
+
+1. Write `$CTX/resume.<lang>.json` — a faithful translation of `$CTX/resume.json`,
+   bullet for bullet, with `lang` and `labels` set (`Summary`, `Skills`, …).
+   Amounts keep their figures (`R$ 800 mil` → `R$ 800k`).
+2. `python3 tools/cvtailor.py check --translation $CTX/resume.json $CTX/resume.<lang>.json`
+   — same name, contact, links, companies, periods, schools, bullet and skill-group
+   counts; no number, technology or seniority word the original lacks.
+3. For each posting, write `NN-<company>-<id>.<lang>.json` next to the original-language
+   version — same order and emphasis, from the translated base — and check it
+   strictly against that base:
+   `python3 tools/cvtailor.py check $CTX/resume.<lang>.json $OUT/$STAMP-cv/*.<lang>.json`.
+4. Render, index and re-score as above; the job's `resume.translations.<lang>`
+   gets the paths.
 
 The renderer looks for `CHROME`, then a cached `chrome-headless-shell`
 (Puppeteer or Playwright), then a Chromium-family browser on `PATH`. Inter comes
@@ -282,7 +307,7 @@ from Google Fonts, so the first render needs network.
       "seniority": "Mid-Senior level",
       "priority": "high",
       "score": 0.91,
-      "scores": {"match": 0.8, "match_keywords": 0.74, "match_source": "review", "remote": 1.0, "recency": 0.92},
+      "scores": {"match": 0.8, "match_keywords": 0.74, "match_source": "review", "remote": 1.0, "recency": 0.92, "company": 1.0},
       "checks": {"match": true, "remote": true, "recent": true},
       "matched_skills": ["TypeScript", "React", "Node.js"],
       "reasons": ["skills: TypeScript, React, Node.js", "remote · home", "postada há 9h"],
@@ -290,7 +315,11 @@ from Google Fonts, so the first render needs network.
       "blockers": [],
       "review": "Next.js + Node em produto de pagamentos",
       "also": [{"id": "4483891400", "url": "https://www.linkedin.com/jobs/view/4483891400/", "location": "Recife, Pernambuco, Brazil"}],
-      "resume": {"json": "/abs/plans/jobs/2026-10-29-1532-cv/01-acme-4483891327.json", "pdf": "/abs/…/01-acme-4483891327.pdf"},
+      "resume": {
+        "json": "/abs/plans/jobs/2026-10-29-1532-cv/01-acme-4483891327.json",
+        "pdf": "/abs/…/01-acme-4483891327.pdf",
+        "translations": {"en": {"json": "/abs/…/01-acme-4483891327.en.json", "pdf": "/abs/…/01-acme-4483891327.en.pdf"}}
+      },
       "new": true
     }
   ]
@@ -299,5 +328,5 @@ from Google Fonts, so the first render needs network.
 
 One entry per opening — copies in other cities sit under `also`. `resume` appears
 only when the run was scored with `--resumes` (`null` for jobs without one). Sorted by
-priority, then `score` (0.5 match + 0.3 remote + 0.2 recency). The raw
+priority, then `score` ((0.5 match + 0.3 remote + 0.2 recency) × company factor). The raw
 fetch, with full descriptions, stays next to it as `<stamp>.raw.json`.

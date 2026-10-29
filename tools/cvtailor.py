@@ -5,6 +5,7 @@ the same JSON shape plus `target` and `changes`, and may only rephrase, reorder
 and re-emphasize what the source already says.
 
     check   a tailored JSON against its source — exits 1 on any invented fact
+            (--translation: a translated base against the original — same facts, new words)
     render  a résumé JSON to PDF (headless Chromium-family browser)
     index   a folder of tailored JSONs to an index.md
 
@@ -167,14 +168,25 @@ def check(source: dict, tailored: dict) -> tuple[list[str], list[str]]:
         if fold(group["label"]) not in labels:
             errors.append(f"skills label not in the source: {group['label']}")
 
+    errors += _fact_errors(source, tailored, counted=True)
     text = " ".join(free_text(tailored))
+    before, after = len(" ".join(free_text(source))), len(text)
+    if not 0.8 <= after / max(before, 1) <= 1.15:
+        warnings.append(f"text length {after} vs source {before} — check the page count")
+    return errors, warnings
+
+
+def _fact_errors(source: dict, other: dict, counted: bool) -> list[str]:
+    errors = []
+    corpus = _corpus(source)
+    text = " ".join(free_text(other))
     numbers = set(_NUMBER.findall(corpus))
     for number in sorted(set(_NUMBER.findall(text)) - numbers):
         errors.append(f"number not in the source: {number}")
-    counted = counted_numbers(corpus)
-    for number, unit in sorted(counted_numbers(fold(text)) - counted):
-        if number in numbers:
-            errors.append(f"number used for something else than in the source: {number} {unit}")
+    if counted:
+        for number, unit in sorted(counted_numbers(fold(text)) - counted_numbers(corpus)):
+            if number in numbers:
+                errors.append(f"number used for something else than in the source: {number} {unit}")
     for term in sorted(tech_terms(text)):
         if not _has(corpus, term):
             errors.append(f"technology or practice not in the source: {term}")
@@ -182,11 +194,31 @@ def check(source: dict, tailored: dict) -> tuple[list[str], list[str]]:
     for word in SENIORITY:
         if _has(folded, word) and not _has(corpus, word):
             errors.append(f"seniority word not in the source: {word}")
+    return errors
 
-    before, after = len(" ".join(free_text(source))), len(text)
-    if not 0.8 <= after / max(before, 1) <= 1.15:
-        warnings.append(f"text length {after} vs source {before} — check the page count")
-    return errors, warnings
+
+def check_translation(source: dict, translated: dict) -> tuple[list[str], list[str]]:
+    """A translated base: words change, facts do not. Tailor from it with the strict check."""
+    errors: list[str] = []
+    for field in ("name", "contact", "links"):
+        if source.get(field) != translated.get(field):
+            errors.append(f"{field} differs from the source")
+    jobs, translated_jobs = source.get("experience", []), translated.get("experience", [])
+    if len(jobs) != len(translated_jobs):
+        errors.append("experience entries were added or removed")
+    for index, (was, now) in enumerate(zip(jobs, translated_jobs)):
+        for key in ("company", "period"):
+            if was.get(key) != now.get(key):
+                errors.append(f"experience {index + 1}: {key} changed")
+        if len(was.get("bullets", [])) != len(now.get("bullets", [])):
+            errors.append(f"experience {index + 1}: bullet count changed")
+    schools = [(item.get("school"), item.get("period")) for item in source.get("education", [])]
+    if schools != [(item.get("school"), item.get("period")) for item in translated.get("education", [])]:
+        errors.append("education schools or periods differ from the source")
+    if len(source.get("skills", [])) != len(translated.get("skills", [])):
+        errors.append("skills groups were added or removed")
+    errors += _fact_errors(source, translated, counted=False)
+    return errors, []
 
 
 def _e(text: str) -> str:
@@ -326,9 +358,10 @@ def build_index(folder: Path) -> str:
 
 def _check(args) -> int:
     source = json.loads(Path(args.source).read_text())
+    verify = check_translation if args.translation else check
     failed = False
     for path in args.tailored:
-        errors, warnings = check(source, json.loads(Path(path).read_text()))
+        errors, warnings = verify(source, json.loads(Path(path).read_text()))
         status = "FAIL" if errors else "ok"
         print(f"{status}  {path}")
         for line in errors:
@@ -361,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     checker = sub.add_parser("check", help="refuse invented facts in tailored résumés")
     checker.add_argument("source")
     checker.add_argument("tailored", nargs="+")
+    checker.add_argument("--translation", action="store_true", help="check a translated base against the original")
     checker.set_defaults(run=_check)
 
     renderer = sub.add_parser("render", help="résumé JSON to PDF")

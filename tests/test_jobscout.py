@@ -428,9 +428,42 @@ class TestResumes:
         assert jobs["1"]["resume"] == {
             "json": str((tmp_path / "01-acme-2.json").resolve()),
             "pdf": str((tmp_path / "01-acme-2.pdf").resolve()),
+            "translations": {},
         }
         assert jobs["3"]["resume"] is None
 
     def test_without_resumes_there_is_no_field(self, profile):
         raw = {"fetched_at": "2026-10-29T12:00:00Z", "jobs": [make_job()]}
         assert "resume" not in score(raw, profile, NOW)["jobs"][0]
+
+
+    def test_a_translation_lands_under_its_language(self, profile, tmp_path):
+        (tmp_path / "01-acme-2.json").write_text(json.dumps({"target": {"id": "2"}}))
+        (tmp_path / "01-acme-2.en.json").write_text(json.dumps({"target": {"id": "2"}}))
+        entry = load_resumes(tmp_path)["2"]
+        assert entry["json"].endswith("01-acme-2.json")
+        assert entry["translations"]["en"] == {"json": str((tmp_path / "01-acme-2.en.json").resolve()), "pdf": None}
+
+
+class TestCompanySignals:
+    def test_shared_list_drops_one_level_and_lowers_the_score(self, profile):
+        plain = classify(make_job(), profile, NOW)
+        flagged = classify({**make_job(), "company": "BairesDev"}, profile, NOW)
+        assert plain["priority"] == "high"
+        assert flagged["priority"] == "medium"
+        assert flagged["score"] == pytest.approx(plain["score"] * 0.6, abs=0.002)
+        assert any(flag.startswith("empresa despriorizada") for flag in flagged["red_flags"])
+
+    def test_matches_any_company_name_variant(self, profile):
+        assert classify({**make_job(), "company": "Stefanini LATAM"}, profile, NOW)["scores"]["company"] == 0.6
+
+    def test_profile_can_add_its_own(self, tmp_path):
+        path = tmp_path / "jobs.json"
+        path.write_text(json.dumps({"companies": {"deprioritize": [{"names": ["acme"], "factor": 0.5, "note": "x"}]}}))
+        profile = load_profile(str(path))
+        assert [entry["names"] for entry in profile["deprioritize"]][-1] == ["acme"]
+        assert classify(make_job(), profile, NOW)["scores"]["company"] == 0.5
+
+    def test_a_discard_stays_a_discard(self, profile):
+        job = classify({**make_job(title="Recruiter"), "company": "BairesDev"}, profile, NOW)
+        assert job["priority"] == "discard"

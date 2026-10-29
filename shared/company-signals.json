@@ -1,0 +1,15 @@
+{
+  "about": "Companies whose LinkedIn postings convert poorly for the owner's searches. Every scout run reads this file; a profile adds its own under companies.deprioritize. A match multiplies the score by `factor` and drops the priority one level (high -> medium -> low), with `note` shown as a red flag.",
+  "deprioritize": [
+    {
+      "names": ["bairesdev"],
+      "factor": 0.6,
+      "note": "publica muitas vagas recorrentes e genéricas, muitas vezes para banco de talentos — chance baixa de ser uma vaga aberta de fato"
+    },
+    {
+      "names": ["stefanini"],
+      "factor": 0.6,
+      "note": "publica muitas vagas recorrentes e genéricas, muitas vezes para banco de talentos — chance baixa de ser uma vaga aberta de fato"
+    }
+  ]
+}

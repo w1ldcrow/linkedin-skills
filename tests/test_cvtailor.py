@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.cvtailor import build_index, check, render_html, tech_terms
+from tools.cvtailor import build_index, check, check_translation, render_html, tech_terms
 
 SOURCE = {
     "name": "Ana Souza",
@@ -144,3 +144,55 @@ class TestIndex:
         index = build_index(tmp_path)
         assert "## 01-acme-1 — Backend Python · Acme" in index
         assert "- Resumo abre com FastAPI" in index
+
+
+ENGLISH = {
+    **copy.deepcopy(SOURCE),
+    "headline": "Back-end Developer",
+    "summary": "Back-end developer since 2022. Built an API in Python and FastAPI with 40 integrations.",
+    "skills": [
+        {"label": "Back-end", "items": "Python, FastAPI, PostgreSQL, Redis"},
+        {"label": "Infra", "items": "Docker, Kubernetes, AWS, GitHub Actions (CI/CD)"},
+    ],
+    "experience": [
+        {
+            "title": "Back-end Developer",
+            "company": "Loja",
+            "place": "São Paulo, SP (remote)",
+            "period": "01/2023 – 12/2025",
+            "context": "E-commerce with a 5-person team.",
+            "bullets": [
+                "Built the orders API in FastAPI with PostgreSQL, serving 300 stores.",
+                "Integrated 40 shipping and payment partners via API.",
+                "Set up Kubernetes deployment on AWS with GitHub Actions.",
+            ],
+        }
+    ],
+    "education": [{"title": "Bachelor's degree in Physics", "school": "UFPE, Recife, PE", "period": "2018 – 2021"}],
+}
+
+
+class TestCheckTranslation:
+    def test_a_faithful_translation_passes(self):
+        assert check_translation(SOURCE, ENGLISH) == ([], [])
+
+    def test_a_translation_may_not_add_technology_or_numbers(self):
+        english = copy.deepcopy(ENGLISH)
+        english["summary"] = "Back-end developer since 2022 with Kafka, serving 500 stores."
+        errors, _ = check_translation(SOURCE, english)
+        assert "technology or practice not in the source: kafka" in errors
+        assert "number not in the source: 500" in errors
+
+    def test_a_translation_keeps_companies_periods_and_schools(self):
+        english = copy.deepcopy(ENGLISH)
+        english["experience"][0]["period"] = "2022 – 2025"
+        english["education"][0]["school"] = "Federal University of Pernambuco"
+        errors, _ = check_translation(SOURCE, english)
+        assert "experience 1: period changed" in errors
+        assert "education schools or periods differ from the source" in errors
+
+    def test_a_tailored_english_version_is_strictly_checked_against_the_english_base(self):
+        tailored_en = copy.deepcopy(ENGLISH)
+        tailored_en["headline"] = "Senior Back-end Developer"
+        errors, _ = check(ENGLISH, tailored_en)
+        assert "seniority word not in the source: senior" in errors

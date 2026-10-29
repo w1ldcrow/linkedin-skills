@@ -153,7 +153,10 @@ It also runs for someone else from their résumé (kept in `context/private/<slu
 and on request adapts that résumé to the top openings — reordered and re-cut, never
 embellished: `tools/cvtailor.py check` rejects any number, technology, employer,
 date or seniority the source does not state, then renders each version to PDF in
-the original's layout.
+the original's layout. Translations go through the same gate: a translated base is
+checked once against the original, then each translated version against that base.
+Companies whose postings rarely turn into live openings (`shared/company-signals.json`)
+drop one priority level in every run.
 
 **`linkedin-social-growth`.** Asks the cycle's pillar, targets, goal, and time budget;
 collects posts worth engaging (browser tier searches read-only, manual tier hands you a
