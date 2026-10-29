@@ -1,9 +1,10 @@
 # linkedin-skills
 
 Claude Code skills that help you write LinkedIn content — profile copy, a monthly post
-calendar, comments and connection notes — in your own voice. This is an assistant, not
-an automation bot: nothing is scheduled, nothing runs unattended, and nothing reaches
-LinkedIn without you reading it and saying yes.
+calendar, comments and connection notes — in your own voice, and that rank the job
+openings worth your time. This is an assistant, not an automation bot: nothing is
+scheduled, nothing runs unattended, and nothing reaches LinkedIn without you reading
+it and saying yes.
 
 No personal data and no default identity live in this repo. Who you are, how you write,
 and what you publish live in gitignored local files that the skills build with you, by
@@ -26,13 +27,14 @@ your own session at human pace with per-item approval — low-risk, but opt-in p
 and never unattended. Never hand credentials or cookies to a scraper. Details:
 `shared/linkedin-access.md`.
 
-## The three skills
+## The four skills
 
 | Skill | Contract | Writes to LinkedIn |
 |---|---|---|
 | `linkedin-profile-updater` | Plan once, run once | No — checklist; browser apply opt-in |
 | `linkedin-content-calendar` | Plan 30 days, draft the month, publish one slot per run | **Yes** — official API, on your explicit yes |
 | `linkedin-social-growth` | Plan once, run once | No — checklist; browser send opt-in |
+| `linkedin-job-scout` | Scan, rank, report | No — reads public job pages only |
 
 Each asks questions before producing anything, and again before anything reaches
 LinkedIn.
@@ -56,6 +58,7 @@ mkdir -p ~/.claude/skills
 ln -sfn "$PWD/skills/linkedin-profile-updater"  ~/.claude/skills/linkedin-profile-updater
 ln -sfn "$PWD/skills/linkedin-content-calendar" ~/.claude/skills/linkedin-content-calendar
 ln -sfn "$PWD/skills/linkedin-social-growth"    ~/.claude/skills/linkedin-social-growth
+ln -sfn "$PWD/skills/linkedin-job-scout"        ~/.claude/skills/linkedin-job-scout
 ```
 
 Symlinks, not copies: each `SKILL.md` resolves the repo root from its own symlink.
@@ -137,6 +140,16 @@ hands you direct edit links. The browser tier can fill fields one at a time with
 approval each. Also works on a profile you give as a URL or paste: it builds
 `context/<slug>.md`, marking anything inferred `[VERIFICAR]`.
 
+**`linkedin-job-scout`.** Runs the searches in `context/jobs.json` (copied from
+`context/jobs.template.json` and tailored from your profile on first run) against
+LinkedIn's public job pages, reads each posting, and writes
+`plans/jobs/<stamp>.json` with every job classified: **high** is a profile match,
+remote from where you live and recently posted; **medium** a match plus one of the
+two; **low** the rest; **discard** a blocker such as a role you avoid, a US-only
+remote or on-site in another city. A keyword pass scores everything, then the model
+reads the candidates' descriptions and corrects the match before the final
+classification. Jobs not seen in earlier runs are marked `new`. It never applies.
+
 **`linkedin-social-growth`.** Asks the cycle's pillar, targets, goal, and time budget;
 collects posts worth engaging (browser tier searches read-only, manual tier hands you a
 search list); writes `plans/growth/YYYY-MM-DD-growth.md` with comments that make a real
@@ -148,7 +161,7 @@ cycle doesn't repeat it.
 
 | Data | Lives | Tracked |
 |---|---|---|
-| `context/profile.md`, `voice.md`, `brand.md`, `targets.md` | your machine | No — gitignored |
+| `context/profile.md`, `voice.md`, `brand.md`, `targets.md`, `jobs.json` | your machine | No — gitignored |
 | `plans/` | your machine | No — gitignored |
 | `.linkedin-token.json` | your machine, `chmod 600` | No — gitignored |
 | Templates, skills, tools, shared references | the repo | Yes |
@@ -174,6 +187,7 @@ a warning.
 | `auth` hangs after approval | Port 50001 busy, or redirect URI not exactly `http://localhost:50001/callback`. |
 | Publish fails 401/403 | Token revoked or **Share on LinkedIn** not approved on the app. |
 | Scrape returns HTTP 999 | Normal. Use the browser tier or paste the page. |
+| `jobscout.py fetch` ends `partial` | LinkedIn throttled the guest pages. Wait 30 minutes or run fewer searches. |
 | Captcha during browser use | Skills stop and hand back a checklist. Finish by hand. |
 | Duplicate-post error | Same text already posted; the calendar marks slots `done` to prevent this. |
 | `profile.md` or `targets.md` missing | Copy from its `.template.md` sibling. |
@@ -193,10 +207,10 @@ the Node port mirrors it.
 ## Layout
 
 ```
-context/    templates (tracked) + profile, voice, brand, targets (local)
-skills/     the three SKILL.md workflows
+context/    templates (tracked) + profile, voice, brand, targets, jobs (local)
+skills/     the four SKILL.md workflows
 shared/     auth, context-setup, voice-check, visuals, linkedin-access
-tools/      linkedin_api.py, linkedin-api.mjs, voicecheck, batchcheck, draftplan, calendar_state
+tools/      linkedin_api.py, linkedin-api.mjs, voicecheck, batchcheck, draftplan, calendar_state, jobscout
 tests/      pytest suite
 plans/      generated output, local only
 ```

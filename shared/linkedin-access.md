@@ -19,7 +19,10 @@ claim about a higher-risk action.
    the extension is connected — check before promising it.
 3. **Public scrape** — a scraping skill (e.g. `firecrawl-scrape`) against
    public LinkedIn URLs, no login. LinkedIn answers HTTP 999 to most anonymous
-   fetches, so treat any success as a bonus, never as a dependency.
+   fetches, so treat any success as a bonus, never as a dependency. The one
+   exception is jobs: the guest job endpoints (`jobs-guest/jobs/api/…`) answer
+   anonymous requests normally, and `tools/jobscout.py` reads them directly —
+   no vendor, no login, at a polite pace.
 4. **Manual** — the user opens LinkedIn and pastes back what they see. Always
    works. This was the whole design before the rewrite and remains the fallback.
 
@@ -34,6 +37,7 @@ claim about a higher-risk action.
 | Read pending invitations | No — not in the public API | **Yes** | no | paste |
 | Edit profile fields | No — Profile Edit API is partner-gated | opt-in, per-field approval | no | **default** |
 | Comment, invite, accept | No — no endpoint exists | opt-in, per-item approval | no | **default** |
+| Search and read job postings | No — partner-gated | avoid at volume | **Yes** — `tools/jobscout.py`, guest job pages | paste |
 
 ## Operating rules
 
@@ -52,7 +56,7 @@ claim about a higher-risk action.
   authorized by the terms. The owner opted into the browser tier knowing this.
   Keep it read-mostly, and never let it run unattended.
 
-## What this means for the three skills
+## What this means for the four skills
 
 - `linkedin-content-calendar` publishes through the API tier. It is still the
   only skill that writes to LinkedIn by default.
@@ -63,3 +67,6 @@ claim about a higher-risk action.
 - `linkedin-social-growth` collects posts, people, and invitations through the
   browser when available, otherwise hands the user a search list. Sends are
   manual by default; browser sends are per-item opt-in.
+- `linkedin-job-scout` reads public job listings through the guest job pages
+  only — never the owner's session, never cookies — and writes nothing to
+  LinkedIn. Applying stays with the owner.

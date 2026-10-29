@@ -13,6 +13,7 @@ context/profile.md
 context/targets.md
 context/brand.md
 context/voice.md
+context/jobs.json
 context/private/
 plans/**
 !plans/*/

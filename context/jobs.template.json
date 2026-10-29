@@ -1,0 +1,77 @@
+{
+  "candidate": {
+    "seniority": ["mid", "senior"],
+    "languages": ["portuguese", "english"],
+    "cities": []
+  },
+  "titles": {
+    "want": [
+      "full stack", "fullstack", "full-stack", "front end", "frontend", "front-end",
+      "software engineer", "software developer", "web developer", "desenvolvedor", "desenvolvedora",
+      "engenheiro de software", "engenheira de software", "programador", "programadora",
+      "react", "next.js", "node", "node.js", "typescript", "javascript"
+    ],
+    "avoid": [
+      "intern", "internship", "estagio", "estagiario", "estagiaria", "trainee",
+      "manager", "gerente", "coordenador", "coordenadora", "coordinator", "director", "diretor", "head of",
+      "sales", "vendas", "comercial", "account executive", "recruiter", "recrutador", "recrutadora", "talent",
+      "data scientist", "cientista de dados", "data engineer", "engenheiro de dados", "data analyst", "analista de dados",
+      "qa", "quality assurance", "tester", "devops", "sre", "site reliability", "designer",
+      "product owner", "product manager", "scrum master", "suporte", "support"
+    ]
+  },
+  "skills": [
+    {"name": "TypeScript", "weight": 3, "aliases": ["typescript"]},
+    {"name": "React", "weight": 3, "aliases": ["react", "react.js", "reactjs"]},
+    {"name": "Next.js", "weight": 3, "aliases": ["next.js", "nextjs"]},
+    {"name": "Node.js", "weight": 3, "aliases": ["node.js", "nodejs", "node"]},
+    {"name": "JavaScript", "weight": 2, "aliases": ["javascript", "es6"]},
+    {"name": "Tailwind", "weight": 2, "aliases": ["tailwind", "tailwindcss"]},
+    {"name": "NestJS", "weight": 2, "aliases": ["nestjs", "nest.js"]},
+    {"name": "PostgreSQL", "weight": 2, "aliases": ["postgres", "postgresql"]},
+    {"name": "Docker", "weight": 1, "aliases": ["docker"]},
+    {"name": "AWS", "weight": 1, "aliases": ["aws", "amazon web services"]},
+    {"name": "Testes", "weight": 1, "aliases": ["jest", "vitest", "playwright", "cypress", "testing library"]}
+  ],
+  "off_stack": [
+    "java", "spring", "spring boot", "c#", ".net", "dotnet", "asp.net", "php", "laravel", "ruby", "rails",
+    "golang", "rust", "kotlin", "swift", "scala", "elixir", "c++", "angular", "vue", "vue.js", "flutter", "dart",
+    "salesforce", "sap", "abap", "delphi", "cobol"
+  ],
+  "dealbreakers": [
+    "security clearance", "clearance required", "polygraph", "us citizenship", "u.s. citizenship",
+    "us citizens only", "green card"
+  ],
+  "remote": {
+    "home": [
+      "brazil", "brasil",
+      "acre", "alagoas", "amapa", "amazonas", "bahia", "ceara",
+      "espirito santo", "goias", "maranhao", "mato grosso", "mato grosso do sul", "minas gerais",
+      "paraiba", "parana", "pernambuco", "piaui", "rio de janeiro", "rio grande do norte", "rio grande do sul",
+      "rondonia", "roraima", "santa catarina", "sao paulo", "sergipe", "tocantins",
+      "belo horizonte", "brasilia", "campinas", "curitiba", "florianopolis", "fortaleza", "porto alegre",
+      "recife"
+    ],
+    "regions": ["latin america", "latam", "america latina", "south america", "americas", "worldwide", "anywhere"],
+    "open_phrases": [
+      "brazil", "brasil", "latam", "latin america", "america latina", "work from anywhere", "anywhere in the world",
+      "remote worldwide", "fully remote worldwide", "pj"
+    ],
+    "restricted_phrases": [
+      "us only", "us-only", "usa only", "us based only", "must be based in the us", "must be located in the us",
+      "must reside in the us", "must be located in the united states", "must reside in the united states",
+      "authorized to work in the united states", "authorized to work in the us", "eu only",
+      "must be based in europe", "must be located in europe", "uk only", "right to work in the uk",
+      "canada only", "must be located in canada"
+    ]
+  },
+  "thresholds": {"match": 0.6, "recent_hours": 72, "skill_saturation": 12},
+  "search_defaults": {"workplace": ["remote"], "hours": 168, "experience": [], "max_pages": 3},
+  "searches": [
+    {"keywords": "full stack", "location": "Brazil"},
+    {"keywords": "frontend react", "location": "Brazil"},
+    {"keywords": "node.js typescript", "location": "Brazil"},
+    {"keywords": "full stack", "location": "Latin America"},
+    {"keywords": "react typescript", "location": "Latin America"}
+  ]
+}
