@@ -1,6 +1,6 @@
 ---
 name: linkedin-job-scout
-description: Use when sweeping LinkedIn for job openings and ranking them for the profile owner — "varre vagas no linkedin", "acha vagas remotas pra mim", "quais vagas novas tem", "job hunt", "scan jobs". Searches LinkedIn's public job listings, reads each posting, and classifies every one into a JSON as high / medium / low / discard, where high means profile match AND remote from where the owner lives AND recently posted.
+description: Use when sweeping LinkedIn for job openings and ranking them for the profile owner — "varre vagas no linkedin", "acha vagas remotas pra mim", "quais vagas novas tem", "job hunt", "scan jobs". Searches LinkedIn's public job listings, reads each posting, and classifies every one into a JSON as high / medium / low / discard, where high means profile match AND remote from where the owner lives AND recently posted. Also scans for someone else from their résumé, and tailors that résumé to the best openings without inventing anything ("adapta o currículo pras 10 melhores vagas", "tailor my CV to these jobs").
 ---
 
 # LinkedIn Job Scout
@@ -30,10 +30,16 @@ or remote restricted to another country.
   collection even of public pages. Low-volume reads of public job listings for the
   owner's own job search are low-risk, not sanctioned. The owner opted in knowing
   this. See `shared/linkedin-access.md`.
-- **The owner applies.** The output is a list to read, not a queue to submit.
-- **Local only.** `context/jobs.json` and `plans/jobs/` are gitignored.
+- **The person applies.** The output is a list to read and résumés to send by
+  hand, not a queue to submit.
+- **A tailored résumé is the same résumé.** Rephrase, reorder, re-emphasize —
+  never add a skill, number, employer, title, date or seniority the source does
+  not state. `tools/cvtailor.py check` enforces it; a failing file is fixed, never
+  shipped with a note.
+- **Local only.** `context/jobs.json`, `context/private/` and `plans/` are
+  gitignored: profiles, résumés, contact data and output never enter the repo.
 
-## Step 0: resolve the repo root
+## Step 0: resolve the repo root and the subject
 
 ```bash
 REPO=$(dirname "$(dirname "$(readlink -f ~/.claude/skills/linkedin-job-scout)")")
@@ -41,14 +47,37 @@ cd "$REPO" && pwd
 STAMP=$(date +%F-%H%M)
 ```
 
-Every path below is relative to `$REPO`.
+The subject is the owner unless the user hands over someone else's résumé or
+names someone with a folder in `context/private/`:
 
-## Step 1: the job profile
+| Subject | `CTX` | `OUT` |
+|---|---|---|
+| the owner | `context` | `plans/jobs` |
+| someone else (`<slug>` = first name, lowercase) | `context/private/<slug>` | `plans/jobs/<slug>` |
 
-`context/jobs.json` decides what "match" means. If it is missing, copy
-`context/jobs.template.json` and tailor it before the first scan:
+Every path below is relative to `$REPO`. The posting cache `plans/jobs/cache` is
+shared — a posting reads the same for everyone.
 
-- Read `context/profile.md` if it exists (Stack, Trajetória) and any résumé the
+## Step 1: the résumé and the job profile
+
+**The résumé** — only when the user hands one over (PDF, DOCX, text) or asks for
+tailoring. Extract it (`pdftotext -layout file.pdf -`) and write
+`$CTX/resume.json` in the shape of `context/resume.template.json`, **word for
+word**: no fixes, no rewording, every bullet as written. Then prove it:
+
+```bash
+python3 tools/cvtailor.py check $CTX/resume.json $CTX/resume.json
+python3 tools/cvtailor.py render $CTX/resume.json -o $OUT/resume-source.pdf
+pdftoppm -r 60 -png $OUT/resume-source.pdf $OUT/resume-source   # look at it next to the original
+```
+
+The render must match the original's content and page count before anything is
+tailored from it.
+
+**The job profile** — `$CTX/jobs.json` decides what "match" means. If it is
+missing, copy `context/jobs.template.json` and tailor it before the first scan:
+
+- Read `$CTX/resume.json`, `context/profile.md` for the owner, and any résumé the
   user points to. Skills go in `skills` with a weight — 3 for the core stack the
   owner would lead with, 2 for solid, 1 for a plus — and every spelling that
   appears in postings under `aliases`.
@@ -60,6 +89,7 @@ Every path below is relative to `$REPO`.
   call: target roles, seniority, a city where hybrid is fine, languages.
 
 Show the user the file once it is written. On later runs, read it without asking.
+For someone else, set `candidate.cities` to their city, not the owner's.
 
 Field reference:
 
@@ -83,7 +113,7 @@ Field reference:
 Workplace comes from the title, then the description, then LinkedIn's remote tag —
 posters tag "100% presencial" jobs as remote often enough that the tag goes last.
 
-Map what the user asked onto flags; do not edit `context/jobs.json` for a one-off:
+Map what the user asked onto flags; do not edit `$CTX/jobs.json` for a one-off:
 
 | Ask | Flag on `fetch` |
 |---|---|
@@ -101,7 +131,7 @@ already read are cached in `plans/jobs/cache/` for 60 days). Run it in the
 background and wait for it:
 
 ```bash
-python3 tools/jobscout.py fetch --profile context/jobs.json -o plans/jobs/$STAMP.raw.json
+python3 tools/jobscout.py fetch --profile $CTX/jobs.json --cache plans/jobs/cache -o $OUT/$STAMP.raw.json
 ```
 
 If it ends `partial`, say so plainly in the final summary and carry on with what
@@ -110,14 +140,14 @@ was read.
 ## Step 4: score, then review the candidates
 
 ```bash
-python3 tools/jobscout.py score plans/jobs/$STAMP.raw.json --profile context/jobs.json \
-  --seen plans/jobs/seen.json -o plans/jobs/$STAMP.json
-python3 tools/jobscout.py sheet plans/jobs/$STAMP.raw.json --profile context/jobs.json --limit 40
+python3 tools/jobscout.py score $OUT/$STAMP.raw.json --profile $CTX/jobs.json \
+  --seen $OUT/seen.json -o $OUT/$STAMP.json
+python3 tools/jobscout.py sheet $OUT/$STAMP.raw.json --profile $CTX/jobs.json --limit 40
 ```
 
 The keyword score is a first pass. The sheet prints every candidate near or above
-the match bar with its description. Read each one against `context/jobs.json`
-(and `context/profile.md` if present) and write `plans/jobs/$STAMP.review.json`:
+the match bar with its description. Read each one against `$CTX/jobs.json`
+(and `$CTX/resume.json` or `context/profile.md`) and write `$OUT/$STAMP.review.json`:
 
 ```json
 {
@@ -148,8 +178,8 @@ the match bar with its description. Read each one against `context/jobs.json`
 Re-score with the review — the same `--seen` file is safe to reuse, `new` holds:
 
 ```bash
-python3 tools/jobscout.py score plans/jobs/$STAMP.raw.json --profile context/jobs.json \
-  --seen plans/jobs/seen.json --review plans/jobs/$STAMP.review.json -o plans/jobs/$STAMP.json
+python3 tools/jobscout.py score $OUT/$STAMP.raw.json --profile $CTX/jobs.json \
+  --seen $OUT/seen.json --review $OUT/$STAMP.review.json -o $OUT/$STAMP.json
 ```
 
 ## Step 5: report
@@ -160,13 +190,74 @@ In pt-BR, short:
 2. A table of the **high** jobs, new ones first: title, company, location, posted
    (`hours_ago`), applicants, the `why`, and the URL.
 3. The three best **medium** jobs, each with the one check it missed.
-4. The absolute path of `plans/jobs/$STAMP.json`.
+4. The absolute path of `$OUT/$STAMP.json`.
 
-Stop there. Do not open the postings, apply, or contact anyone.
+Stop there unless tailoring was asked for. Do not apply or contact anyone.
+
+## Step 6: tailor the résumé (only when asked)
+
+Pick the top N openings from `$OUT/$STAMP.json`: high first, then medium jobs that
+pass the remote check, then the rest of medium, each group by `score`; one per
+opening (`also` copies are the same job); never a discard. A résumé for a job the
+person cannot take from where they live is wasted, so remote outranks recent here. Read
+each one in full:
+
+```bash
+python3 tools/jobscout.py show $OUT/$STAMP.raw.json <id> <id> ...
+```
+
+For each, copy `$CTX/resume.json` to `$OUT/$STAMP-cv/NN-<company-slug>-<id>.json`
+(NN = rank, 01…) and adapt it **lightly**:
+
+| May change | How |
+|---|---|
+| `headline` | append the core stack the posting leads with, from words already in the source ("Desenvolvedor Back-end Python") |
+| `summary` | reorder and re-cut so the first sentence answers what the posting asks first; same facts |
+| `skills` | reorder groups and items so the posting's stack comes first; labels stay as written |
+| bullets | reorder within each job, most relevant first; reword only to use the posting's term for the very same thing |
+| `context` | trim or reword, same facts |
+
+Everything else is frozen: name, contact, links, employers, titles, places,
+periods, education, the number of bullets per job, the language of the résumé.
+A posting in English gets a `changes` line saying an English version would read
+better; translating is a separate request.
+
+Add to each file:
+
+```json
+"target": {"id": "4483891327", "title": "Backend Engineer (Python)", "company": "Acme", "url": "https://www.linkedin.com/jobs/view/4483891327/"},
+"changes": ["Resumo abre com FastAPI + PostgreSQL, que a vaga lista primeiro", "Bullet de Kubernetes subiu para o 2º lugar"]
+```
+
+`changes` is for the person sending it: what moved and why, one line each, and
+any requirement of the posting the source does not cover ("a vaga pede Kafka —
+não está no currículo, não foi adicionado").
+
+Then check, render, index:
+
+```bash
+python3 tools/cvtailor.py check $CTX/resume.json $OUT/$STAMP-cv/*.json   # must print ok for every file
+python3 tools/cvtailor.py render $OUT/$STAMP-cv/*.json
+python3 tools/cvtailor.py index $OUT/$STAMP-cv
+python3 tools/jobscout.py score $OUT/$STAMP.raw.json --profile $CTX/jobs.json --seen $OUT/seen.json \
+  --review $OUT/$STAMP.review.json --resumes $OUT/$STAMP-cv -o $OUT/$STAMP.json
+```
+
+The last command writes `resume: {json, pdf}` — absolute paths — into each
+tailored job in `$OUT/$STAMP.json`, so the ranking and the files travel together.
+
+Every `error` is a fact the source does not support: rewrite until `ok`. Read
+every `warn`. Confirm each PDF keeps the source's page count (`pdfinfo`), and look
+at one rendered page. Report the folder, the list (rank, job, company, link), and
+the gaps the `changes` lines named.
+
+The renderer looks for `CHROME`, then a cached `chrome-headless-shell`
+(Puppeteer or Playwright), then a Chromium-family browser on `PATH`. Inter comes
+from Google Fonts, so the first render needs network.
 
 ## Output
 
-`plans/jobs/<stamp>.json`:
+`$OUT/<stamp>.json`:
 
 ```json
 {
@@ -199,12 +290,14 @@ Stop there. Do not open the postings, apply, or contact anyone.
       "blockers": [],
       "review": "Next.js + Node em produto de pagamentos",
       "also": [{"id": "4483891400", "url": "https://www.linkedin.com/jobs/view/4483891400/", "location": "Recife, Pernambuco, Brazil"}],
+      "resume": {"json": "/abs/plans/jobs/2026-10-29-1532-cv/01-acme-4483891327.json", "pdf": "/abs/…/01-acme-4483891327.pdf"},
       "new": true
     }
   ]
 }
 ```
 
-One entry per opening — copies in other cities sit under `also`. Sorted by
+One entry per opening — copies in other cities sit under `also`. `resume` appears
+only when the run was scored with `--resumes` (`null` for jobs without one). Sorted by
 priority, then `score` (0.5 match + 0.3 remote + 0.2 recency). The raw
 fetch, with full descriptions, stays next to it as `<stamp>.raw.json`.

@@ -34,7 +34,7 @@ and never unattended. Never hand credentials or cookies to a scraper. Details:
 | `linkedin-profile-updater` | Plan once, run once | No — checklist; browser apply opt-in |
 | `linkedin-content-calendar` | Plan 30 days, draft the month, publish one slot per run | **Yes** — official API, on your explicit yes |
 | `linkedin-social-growth` | Plan once, run once | No — checklist; browser send opt-in |
-| `linkedin-job-scout` | Scan, rank, report | No — reads public job pages only |
+| `linkedin-job-scout` | Scan, rank, report; tailor a résumé on request | No — reads public job pages only |
 
 Each asks questions before producing anything, and again before anything reaches
 LinkedIn.
@@ -149,6 +149,11 @@ two; **low** the rest; **discard** a blocker such as a role you avoid, a US-only
 remote or on-site in another city. A keyword pass scores everything, then the model
 reads the candidates' descriptions and corrects the match before the final
 classification. Jobs not seen in earlier runs are marked `new`. It never applies.
+It also runs for someone else from their résumé (kept in `context/private/<slug>/`),
+and on request adapts that résumé to the top openings — reordered and re-cut, never
+embellished: `tools/cvtailor.py check` rejects any number, technology, employer,
+date or seniority the source does not state, then renders each version to PDF in
+the original's layout.
 
 **`linkedin-social-growth`.** Asks the cycle's pillar, targets, goal, and time budget;
 collects posts worth engaging (browser tier searches read-only, manual tier hands you a
@@ -162,6 +167,7 @@ cycle doesn't repeat it.
 | Data | Lives | Tracked |
 |---|---|---|
 | `context/profile.md`, `voice.md`, `brand.md`, `targets.md`, `jobs.json` | your machine | No — gitignored |
+| `context/private/<slug>/` — other people's résumés and job profiles | your machine | No — gitignored |
 | `plans/` | your machine | No — gitignored |
 | `.linkedin-token.json` | your machine, `chmod 600` | No — gitignored |
 | Templates, skills, tools, shared references | the repo | Yes |
@@ -207,10 +213,10 @@ the Node port mirrors it.
 ## Layout
 
 ```
-context/    templates (tracked) + profile, voice, brand, targets, jobs (local)
+context/    templates (tracked) + profile, voice, brand, targets, jobs, private/ (local)
 skills/     the four SKILL.md workflows
 shared/     auth, context-setup, voice-check, visuals, linkedin-access
-tools/      linkedin_api.py, linkedin-api.mjs, voicecheck, batchcheck, draftplan, calendar_state, jobscout
+tools/      linkedin_api.py, linkedin-api.mjs, voicecheck, batchcheck, draftplan, calendar_state, jobscout, cvtailor
 tests/      pytest suite
 plans/      generated output, local only
 ```

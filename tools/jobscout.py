@@ -7,6 +7,7 @@ throttling instead of pushing through it.
     fetch  run the profile's searches, read each surviving posting, write a raw JSON
     score  classify a raw JSON into high / medium / low / discard
     sheet  print the candidates for the model's review, descriptions included
+    show   print full postings by id
 
 high is profile match AND remote from where the candidate lives AND recently
 posted. medium is a match plus one of the other two. Everything else is low,
@@ -85,6 +86,14 @@ CRITERIA_LEVELS = {
 REMOTE_WORDS = ["remote", "remoto", "remota", "home office", "anywhere", "work from home"]
 HYBRID_WORDS = ["hybrid", "hibrido", "hibrida"]
 ONSITE_WORDS = ["on-site", "onsite", "on site", "presencial", "in-office"]
+_MODEL = r"(?:modalidade|modelo|regime|formato|local)(?: de (?:trabalho|atuacao|atuação|contratacao))?\s*[:\-–]?\s*"
+HYBRID_STATED = re.compile(
+    _MODEL + r"hibrid"
+    + r"|\bthis hybrid\b|\bhybrid (?:role|position|model|work|schedule)\b"
+    + r"|\d+\s*x?\s*(?:por semana|na semana|dias?(?: por semana)?)\s*(?:presencia|no escritorio)"
+    + r"|\d+\s*days?\s*(?:a|per)\s*week\s*(?:in|at)\s*(?:the\s*)?office"
+)
+ONSITE_STATED = re.compile(_MODEL + r"presencial|100%\s*presencial|\bfully on-?site\b|\bonsite,? five days\b")
 LANGUAGES = {
     "german": "german", "alemao": "german",
     "french": "french", "frances": "french",
@@ -436,7 +445,7 @@ def level_fit(levels: set[str], accepted: set[str]) -> float:
 
 
 def workplace_of(job: dict, body: str) -> str:
-    """Title beats description beats LinkedIn's filter tag, which posters often get wrong."""
+    """Title, then a stated work model, then loose words, then LinkedIn's tag, which posters get wrong."""
     head = fold(f"{job['title']} {job['location']}")
     if hits(head, HYBRID_WORDS):
         return "hybrid"
@@ -444,6 +453,10 @@ def workplace_of(job: dict, body: str) -> str:
         return "onsite"
     if hits(head, REMOTE_WORDS):
         return "remote"
+    if HYBRID_STATED.search(body):
+        return "hybrid"
+    if ONSITE_STATED.search(body):
+        return "onsite"
     if not hits(body, REMOTE_WORDS):
         if hits(body, HYBRID_WORDS):
             return "hybrid"
@@ -655,7 +668,28 @@ def dedupe(jobs: list[dict]) -> list[dict]:
     return list(kept.values())
 
 
-def score(raw: dict, profile: dict, now: datetime, reviews: dict | None = None, seen: dict | None = None) -> dict:
+def load_resumes(folder: Path) -> dict[str, dict]:
+    """Tailored résumés by the posting id in their `target`, as absolute paths."""
+    found = {}
+    for path in sorted(folder.glob("*.json")):
+        target = json.loads(path.read_text()).get("target", {})
+        if target.get("id"):
+            pdf = path.with_suffix(".pdf")
+            found[str(target["id"])] = {
+                "json": str(path.resolve()),
+                "pdf": str(pdf.resolve()) if pdf.exists() else None,
+            }
+    return found
+
+
+def score(
+    raw: dict,
+    profile: dict,
+    now: datetime,
+    reviews: dict | None = None,
+    seen: dict | None = None,
+    resumes: dict[str, dict] | None = None,
+) -> dict:
     reviews = reviews or {}
     shared: dict[tuple[str, str], dict] = {}
     for job in raw["jobs"]:
@@ -673,6 +707,9 @@ def score(raw: dict, profile: dict, now: datetime, reviews: dict | None = None, 
             job["new"] = first >= raw["fetched_at"]
     jobs.sort(key=lambda job: (PRIORITY_ORDER[job["priority"]], -job["score"]))
     jobs = dedupe(jobs)
+    for job in jobs if resumes else []:
+        ids = [job["id"], *(copy["id"] for copy in job["also"])]
+        job["resume"] = next((resumes[job_id] for job_id in ids if job_id in resumes), None)
     counts = {priority: sum(job["priority"] == priority for job in jobs) for priority in PRIORITY_ORDER}
     if seen is not None:
         counts["new"] = sum(job["new"] for job in jobs)
@@ -785,7 +822,8 @@ def _score(args) -> int:
     reviews = json.loads(Path(args.review).read_text()) if args.review else None
     seen_path = Path(args.seen) if args.seen else None
     seen = json.loads(seen_path.read_text()) if seen_path and seen_path.exists() else ({} if seen_path else None)
-    result = score(raw, profile, now, reviews, seen)
+    resumes = load_resumes(Path(args.resumes)) if args.resumes else None
+    result = score(raw, profile, now, reviews, seen, resumes)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2))
@@ -806,6 +844,35 @@ def _sheet(args) -> int:
     raw = json.loads(Path(args.raw).read_text())
     now = parse_iso(args.now) if args.now else datetime.now(timezone.utc)
     print(review_sheet(raw, profile, now, args.limit, args.chars))
+    return 0
+
+
+def show_postings(raw: dict, ids: list[str]) -> str:
+    """Full postings by id, for tailoring a résumé to one of them."""
+    jobs = {job["id"]: job for job in raw["jobs"]}
+    blocks = []
+    for job_id in ids:
+        job = jobs.get(job_id)
+        if job is None:
+            blocks.append(f"## {job_id} — not in this fetch")
+            continue
+        detail = job.get("detail") or {}
+        blocks.append(
+            "\n".join(
+                [
+                    f"## {job_id} · {job['title']} — {job['company']}",
+                    f"{job['location']} · {detail.get('seniority') or '?'} · {detail.get('employment_type') or '?'}",
+                    job["url"],
+                    "",
+                    detail.get("description") or "(descrição não lida)",
+                ]
+            )
+        )
+    return "\n\n---\n\n".join(blocks)
+
+
+def _show(args) -> int:
+    print(show_postings(json.loads(Path(args.raw).read_text()), args.ids))
     return 0
 
 
@@ -831,6 +898,7 @@ def main(argv: list[str] | None = None) -> int:
     scorer.add_argument("--review")
     scorer.add_argument("--seen")
     scorer.add_argument("--now")
+    scorer.add_argument("--resumes", metavar="DIR", help="tailored résumés to link by posting id")
     scorer.set_defaults(run=_score)
 
     sheet = sub.add_parser("sheet", help="print the candidates for review")
@@ -840,6 +908,11 @@ def main(argv: list[str] | None = None) -> int:
     sheet.add_argument("--chars", type=int, default=3000)
     sheet.add_argument("--now")
     sheet.set_defaults(run=_sheet)
+
+    show = sub.add_parser("show", help="print full postings by id")
+    show.add_argument("raw")
+    show.add_argument("ids", nargs="+")
+    show.set_defaults(run=_show)
 
     args = parser.parse_args(argv)
     return args.run(args)

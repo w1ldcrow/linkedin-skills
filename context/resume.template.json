@@ -1,0 +1,26 @@
+{
+  "lang": "pt-BR",
+  "name": "Nome Sobrenome",
+  "headline": "Desenvolvedor Back-end",
+  "contact": ["Cidade, UF", "(00) 00000-0000", "email@exemplo.com"],
+  "links": ["linkedin.com/in/slug", "github.com/usuario"],
+  "labels": {"summary": "Resumo", "skills": "Competências", "experience": "Experiência", "education": "Formação"},
+  "summary": "Duas a quatro frases, copiadas do currículo original.",
+  "skills": [
+    {"label": "Back-end", "items": "Python, FastAPI, PostgreSQL"},
+    {"label": "Idiomas", "items": "português (nativo), inglês (avançado)"}
+  ],
+  "experience": [
+    {
+      "title": "Desenvolvedor Back-end",
+      "company": "Empresa",
+      "place": "Cidade, UF (remoto)",
+      "period": "01/2024 – 12/2025",
+      "context": "Opcional: uma linha sobre o produto e o time.",
+      "bullets": ["Um bullet por linha do original, palavra por palavra."]
+    }
+  ],
+  "education": [
+    {"title": "Bacharelado em Ciência da Computação", "school": "Universidade, Cidade, UF", "period": "2018 – 2021"}
+  ]
+}

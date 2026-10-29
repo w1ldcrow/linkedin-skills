@@ -13,12 +13,14 @@ from tools.jobscout import (
     classify,
     collect,
     load_profile,
+    load_resumes,
     parse_age,
     parse_posting,
     parse_search,
     review_sheet,
     score,
     search_url,
+    show_postings,
 )
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
@@ -300,6 +302,15 @@ class TestClassify:
         description = "React e TypeScript. Híbrido de 3 dias presenciais na Faria Lima."
         assert classify(make_job(description=description), profile, NOW)["workplace"] == "hybrid"
 
+    @pytest.mark.parametrize("description, workplace", [
+        ("Python. Modalidade de Atuação: Híbrido (4x por semana Presenciais e 1x por semana Remoto)", "hybrid"),
+        ("Please note: this hybrid position is based in São Paulo. Unless approved for full remote work.", "hybrid"),
+        ("Modelo de trabalho: presencial. Benefício home office não se aplica.", "onsite"),
+        ("Trabalho remoto com 2 dias presenciais no escritório da Paulista.", "hybrid"),
+    ])
+    def test_a_stated_work_model_beats_loose_remote_words(self, profile, description, workplace):
+        assert classify(make_job(description=description), profile, NOW)["workplace"] == workplace
+
     def test_description_that_also_says_remote_keeps_the_tag(self, profile):
         description = "React. Remote first, with an optional hybrid hub in São Paulo."
         assert classify(make_job(description=description), profile, NOW)["workplace"] == "remote"
@@ -395,3 +406,31 @@ class TestReviewSheet:
         assert sheet.startswith("1 candidatos")
         assert "## 1 · Senior Full Stack Engineer — Acme" in sheet
         assert "TypeScript, React, Next.js" in sheet
+
+
+class TestShowPostings:
+    def test_prints_the_full_description_and_flags_unknown_ids(self):
+        raw = {"jobs": [make_job("1", description="TypeScript. " * 400)]}
+        text = show_postings(raw, ["1", "9"])
+        assert text.count("TypeScript.") == 400
+        assert "## 9 — not in this fetch" in text
+
+
+class TestResumes:
+    def test_links_tailored_resumes_by_target_id_including_copies(self, profile, tmp_path):
+        (tmp_path / "01-acme-2.json").write_text(json.dumps({"target": {"id": "2"}}))
+        (tmp_path / "01-acme-2.pdf").write_bytes(b"%PDF")
+        raw = {
+            "fetched_at": "2026-10-29T12:00:00Z",
+            "jobs": [make_job("1", location="Recife, Pernambuco, Brazil"), make_job("2", location="Brazil"), make_job("3", title="Recruiter")],
+        }
+        jobs = {job["id"]: job for job in score(raw, profile, NOW, resumes=load_resumes(tmp_path))["jobs"]}
+        assert jobs["1"]["resume"] == {
+            "json": str((tmp_path / "01-acme-2.json").resolve()),
+            "pdf": str((tmp_path / "01-acme-2.pdf").resolve()),
+        }
+        assert jobs["3"]["resume"] is None
+
+    def test_without_resumes_there_is_no_field(self, profile):
+        raw = {"fetched_at": "2026-10-29T12:00:00Z", "jobs": [make_job()]}
+        assert "resume" not in score(raw, profile, NOW)["jobs"][0]
